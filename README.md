@@ -2,7 +2,32 @@
 
 API REST para gerenciamento de marmitas e pedidos, desenvolvida com Spring Boot 3 e persistência JDBC. O projeto utiliza Docker para facilitar o ambiente de desenvolvimento.
 
+## Descrição do Sistema
+
+O **Marmitaria Leozitos** é um sistema de gerenciamento de vendas para marmitarias. Ele permite que o administrador cadastre marmitas (catálogo) e registre pedidos dos clientes. O sistema realiza automaticamente o cálculo do valor total do pedido com base nos preços atuais das marmitas no banco de dados, garantindo a integridade dos valores e a persistência dos dados através de uma estrutura robusta em MySQL.
+
+## Endpoints da API
+
+### Marmitas
+| Método | Endpoint | Descrição |
+| :--- | :--- | :--- |
+| `GET` | `/marmitas` | Lista todas as marmitas cadastradas. |
+| `GET` | `/marmitas/{id}` | Busca os detalhes de uma marmita específica. |
+| `POST` | `/marmitas` | Cadastra uma nova marmita. |
+| `PUT` | `/marmitas/{id}` | Atualiza os dados de uma marmita existente. |
+| `DELETE` | `/marmitas/{id}` | Remove uma marmita do catálogo. |
+
+### Pedidos
+| Método | Endpoint | Descrição |
+| :--- | :--- | :--- |
+| `GET` | `/pedidos` | Lista todos os pedidos realizados. |
+| `GET` | `/pedidos/{id}` | Busca os detalhes de um pedido e seus itens. |
+| `POST` | `/pedidos` | Cria um novo pedido (calcula total automaticamente). |
+| `PUT` | `/pedidos/{id}` | Atualiza os itens ou status de um pedido. |
+| `DELETE` | `/pedidos/{id}` | Cancela e remove um pedido do sistema. |
+
 ## Tecnologias Utilizadas
+
 
 - **Java 17** (OpenJDK)
 - **Spring Boot 3.2.5**
