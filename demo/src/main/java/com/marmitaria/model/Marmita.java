@@ -7,6 +7,15 @@ public class Marmita {
     private String categoria;
 
 
+    public Marmita() {}
+
+    public Marmita(Long id, String nome, double preco, String categoria) {
+        this.id = id;
+        this.nome = nome;
+        this.preco = preco;
+        this.categoria = categoria;
+    }
+
     public Marmita(String nome, double preco, String categoria) {
         this.nome = nome;
         this.preco = preco;
@@ -16,6 +25,10 @@ public class Marmita {
 
     public Long getId() {
         return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
     }
 
     public String getNome() {

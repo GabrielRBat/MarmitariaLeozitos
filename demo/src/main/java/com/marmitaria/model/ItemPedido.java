@@ -5,6 +5,12 @@ public class ItemPedido {
     private int quantidade;
     private double precoUnitario; 
 
+    public ItemPedido(Marmita marmita, int quantidade, double precoUnitario) {
+        this.marmita = marmita;
+        this.quantidade = quantidade;
+        this.precoUnitario = precoUnitario;
+    }
+
     public ItemPedido(Marmita marmita, int quantidade) {
         this.marmita = marmita;
         this.quantidade = quantidade;
@@ -21,7 +27,23 @@ public class ItemPedido {
         return marmita;
     }
 
+    public void setMarmita(Marmita marmita) {
+        this.marmita = marmita;
+    }
+
     public int getQuantidade() {
         return quantidade;
+    }
+
+    public void setQuantidade(int quantidade) {
+        this.quantidade = quantidade;
+    }
+
+    public double getPrecoUnitario() {
+        return precoUnitario;
+    }
+
+    public void setPrecoUnitario(double precoUnitario) {
+        this.precoUnitario = precoUnitario;
     }
 }
