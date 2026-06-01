@@ -8,7 +8,10 @@ CREATE TABLE IF NOT EXISTS marmita (
 CREATE TABLE IF NOT EXISTS pedido (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     valor_total DOUBLE NOT NULL,
-    status VARCHAR(50) NOT NULL
+    status VARCHAR(50) NOT NULL,
+    cep_entrega VARCHAR(20),
+    endereco_entrega VARCHAR(500),
+    taxa_entrega DOUBLE NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS item_pedido (

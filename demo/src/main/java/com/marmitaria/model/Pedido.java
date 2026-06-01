@@ -7,6 +7,9 @@ public class Pedido {
     private List<ItemPedido> itens;
     private double valorTotal;
     private String status;
+    private String cepEntrega;
+    private String enderecoEntrega;
+    private double taxaEntrega;
 
     public Pedido(Long id, List<ItemPedido> itens, double valorTotal, String status) {
         this.id = id;
@@ -15,8 +18,19 @@ public class Pedido {
         this.status = status;
     }
 
+    public Pedido(Long id, List<ItemPedido> itens, double valorTotal, String status, String cepEntrega, String enderecoEntrega, double taxaEntrega) {
+        this.id = id;
+        this.itens = itens;
+        this.valorTotal = valorTotal;
+        this.status = status;
+        this.cepEntrega = cepEntrega;
+        this.enderecoEntrega = enderecoEntrega;
+        this.taxaEntrega = taxaEntrega;
+    }
+
     public Pedido(List<ItemPedido> itens) {
         this.itens = itens;
+        this.taxaEntrega = 0.0;
         this.valorTotal = calcularValorTotal();
         this.status = "Pendente";
     }
@@ -24,8 +38,15 @@ public class Pedido {
     public Pedido() {}
 
     private double calcularValorTotal() {
-        if (this.itens == null) return 0.0;
-        return this.itens.stream().mapToDouble(ItemPedido::getSubtotal).sum();
+        double subtotalItens = 0.0;
+        if (this.itens != null) {
+            subtotalItens = this.itens.stream().mapToDouble(ItemPedido::getSubtotal).sum();
+        }
+        return subtotalItens + this.taxaEntrega;
+    }
+
+    public void recalcularValorTotal() {
+        this.valorTotal = calcularValorTotal();
     }
 
     public Long getId() {
@@ -58,5 +79,29 @@ public class Pedido {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getCepEntrega() {
+        return cepEntrega;
+    }
+
+    public void setCepEntrega(String cepEntrega) {
+        this.cepEntrega = cepEntrega;
+    }
+
+    public String getEnderecoEntrega() {
+        return enderecoEntrega;
+    }
+
+    public void setEnderecoEntrega(String enderecoEntrega) {
+        this.enderecoEntrega = enderecoEntrega;
+    }
+
+    public double getTaxaEntrega() {
+        return taxaEntrega;
+    }
+
+    public void setTaxaEntrega(double taxaEntrega) {
+        this.taxaEntrega = taxaEntrega;
     }
 }

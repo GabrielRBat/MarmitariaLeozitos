@@ -6,7 +6,11 @@ import com.marmitaria.model.Pedido;
 import org.springframework.stereotype.Repository;
 
 import javax.sql.DataSource;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,7 +27,7 @@ public class JdbcPedidoRepository implements PedidoRepository {
 
     @Override
     public Pedido save(Pedido pedido) {
-        String sqlPedido = "INSERT INTO pedido (valor_total, status) VALUES (?, ?)";
+        String sqlPedido = "INSERT INTO pedido (valor_total, status, cep_entrega, endereco_entrega, taxa_entrega) VALUES (?, ?, ?, ?, ?)";
         String sqlItem = "INSERT INTO item_pedido (pedido_id, marmita_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)";
 
         Connection conn = null;
@@ -34,6 +38,9 @@ public class JdbcPedidoRepository implements PedidoRepository {
             try (PreparedStatement stmtPedido = conn.prepareStatement(sqlPedido, Statement.RETURN_GENERATED_KEYS)) {
                 stmtPedido.setDouble(1, pedido.getValorTotal());
                 stmtPedido.setString(2, pedido.getStatus());
+                stmtPedido.setString(3, pedido.getCepEntrega());
+                stmtPedido.setString(4, pedido.getEnderecoEntrega());
+                stmtPedido.setDouble(5, pedido.getTaxaEntrega());
                 stmtPedido.executeUpdate();
 
                 try (ResultSet generatedKeys = stmtPedido.getGeneratedKeys()) {
@@ -43,36 +50,15 @@ public class JdbcPedidoRepository implements PedidoRepository {
                 }
             }
 
-            try (PreparedStatement stmtItem = conn.prepareStatement(sqlItem)) {
-                for (ItemPedido item : pedido.getItens()) {
-                    stmtItem.setLong(1, pedido.getId());
-                    stmtItem.setLong(2, item.getMarmita().getId());
-                    stmtItem.setInt(3, item.getQuantidade());
-                    stmtItem.setDouble(4, item.getPrecoUnitario());
-                    stmtItem.addBatch();
-                }
-                stmtItem.executeBatch();
-            }
+            inserirItens(conn, pedido, sqlItem);
 
             conn.commit();
             return pedido;
         } catch (SQLException e) {
-            if (conn != null) {
-                try {
-                    conn.rollback();
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
-                }
-            }
+            rollback(conn);
             throw new RuntimeException("Erro ao salvar pedido", e);
         } finally {
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
+            close(conn);
         }
     }
 
@@ -113,7 +99,7 @@ public class JdbcPedidoRepository implements PedidoRepository {
 
     @Override
     public void update(Pedido pedido) {
-        String sqlUpdatePedido = "UPDATE pedido SET valor_total = ?, status = ? WHERE id = ?";
+        String sqlUpdatePedido = "UPDATE pedido SET valor_total = ?, status = ?, cep_entrega = ?, endereco_entrega = ?, taxa_entrega = ? WHERE id = ?";
         String sqlDeleteItens = "DELETE FROM item_pedido WHERE pedido_id = ?";
         String sqlInsertItem = "INSERT INTO item_pedido (pedido_id, marmita_id, quantidade, preco_unitario) VALUES (?, ?, ?, ?)";
 
@@ -122,38 +108,29 @@ public class JdbcPedidoRepository implements PedidoRepository {
             conn = dataSource.getConnection();
             conn.setAutoCommit(false);
 
-            // 1. Atualiza dados básicos do pedido
             try (PreparedStatement stmt = conn.prepareStatement(sqlUpdatePedido)) {
                 stmt.setDouble(1, pedido.getValorTotal());
                 stmt.setString(2, pedido.getStatus());
-                stmt.setLong(3, pedido.getId());
+                stmt.setString(3, pedido.getCepEntrega());
+                stmt.setString(4, pedido.getEnderecoEntrega());
+                stmt.setDouble(5, pedido.getTaxaEntrega());
+                stmt.setLong(6, pedido.getId());
                 stmt.executeUpdate();
             }
 
-            // 2. Remove itens antigos
             try (PreparedStatement stmt = conn.prepareStatement(sqlDeleteItens)) {
                 stmt.setLong(1, pedido.getId());
                 stmt.executeUpdate();
             }
 
-            // 3. Insere itens novos
-            try (PreparedStatement stmt = conn.prepareStatement(sqlInsertItem)) {
-                for (ItemPedido item : pedido.getItens()) {
-                    stmt.setLong(1, pedido.getId());
-                    stmt.setLong(2, item.getMarmita().getId());
-                    stmt.setInt(3, item.getQuantidade());
-                    stmt.setDouble(4, item.getPrecoUnitario());
-                    stmt.addBatch();
-                }
-                stmt.executeBatch();
-            }
+            inserirItens(conn, pedido, sqlInsertItem);
 
             conn.commit();
         } catch (SQLException e) {
-            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); }
+            rollback(conn);
             throw new RuntimeException("Erro ao atualizar pedido", e);
         } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
+            close(conn);
         }
     }
 
@@ -167,13 +144,11 @@ public class JdbcPedidoRepository implements PedidoRepository {
             conn = dataSource.getConnection();
             conn.setAutoCommit(false);
 
-            // 1. Deleta itens primeiro por causa da Foreign Key
             try (PreparedStatement stmt = conn.prepareStatement(sqlDeleteItens)) {
                 stmt.setLong(1, id);
                 stmt.executeUpdate();
             }
 
-            // 2. Deleta o pedido
             try (PreparedStatement stmt = conn.prepareStatement(sqlDeletePedido)) {
                 stmt.setLong(1, id);
                 stmt.executeUpdate();
@@ -181,19 +156,38 @@ public class JdbcPedidoRepository implements PedidoRepository {
 
             conn.commit();
         } catch (SQLException e) {
-            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); }
+            rollback(conn);
             throw new RuntimeException("Erro ao deletar pedido", e);
         } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
+            close(conn);
+        }
+    }
+
+    private void inserirItens(Connection conn, Pedido pedido, String sqlItem) throws SQLException {
+        try (PreparedStatement stmtItem = conn.prepareStatement(sqlItem)) {
+            for (ItemPedido item : pedido.getItens()) {
+                stmtItem.setLong(1, pedido.getId());
+                stmtItem.setLong(2, item.getMarmita().getId());
+                stmtItem.setInt(3, item.getQuantidade());
+                stmtItem.setDouble(4, item.getPrecoUnitario());
+                stmtItem.addBatch();
+            }
+            stmtItem.executeBatch();
         }
     }
 
     private Pedido mapRowToPedido(ResultSet rs) throws SQLException {
         Long id = rs.getLong("id");
-        String status = rs.getString("status");
-        double valorTotal = rs.getDouble("valor_total");
         List<ItemPedido> itens = findItensByPedidoId(id);
-        return new Pedido(id, itens, valorTotal, status);
+        return new Pedido(
+            id,
+            itens,
+            rs.getDouble("valor_total"),
+            rs.getString("status"),
+            rs.getString("cep_entrega"),
+            rs.getString("endereco_entrega"),
+            rs.getDouble("taxa_entrega")
+        );
     }
 
     private List<ItemPedido> findItensByPedidoId(Long pedidoId) {
@@ -217,5 +211,25 @@ public class JdbcPedidoRepository implements PedidoRepository {
             throw new RuntimeException("Erro ao buscar itens do pedido", e);
         }
         return itens;
+    }
+
+    private void rollback(Connection conn) {
+        if (conn != null) {
+            try {
+                conn.rollback();
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+            }
+        }
+    }
+
+    private void close(Connection conn) {
+        if (conn != null) {
+            try {
+                conn.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
     }
 }

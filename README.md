@@ -1,101 +1,166 @@
-# 🍲 Marmitaria Leozitos API
+# Marmitaria Leozitos API
 
-API REST para gerenciamento de marmitas e pedidos, desenvolvida com Spring Boot 3 e persistência JDBC. O projeto utiliza Docker para facilitar o ambiente de desenvolvimento.
+API REST para gerenciamento de marmitas e pedidos, desenvolvida com Spring Boot 3, JDBC, MySQL, integracao com a API externa ViaCEP e mensageria com RabbitMQ.
 
-## Descrição do Sistema
+## Integrantes
 
-O **Marmitaria Leozitos** é um sistema de gerenciamento de vendas para marmitarias. Ele permite que o administrador cadastre marmitas (catálogo) e registre pedidos dos clientes. O sistema realiza automaticamente o cálculo do valor total do pedido com base nos preços atuais das marmitas no banco de dados, garantindo a integridade dos valores e a persistência dos dados através de uma estrutura robusta em MySQL.
+Equipe 7
+
+- Vitor Agner
+- Gabriel B.
+- Henry
+- Leonardo
+
+## Descricao do Sistema
+
+O Marmitaria Leozitos e um sistema de gerenciamento de vendas para marmitarias. O administrador cadastra marmitas no catalogo e registra pedidos dos clientes. O sistema calcula automaticamente o valor total com base nos precos atuais das marmitas no banco, valida os itens do pedido, consulta endereco de entrega pelo CEP usando a ViaCEP e calcula uma taxa de entrega por regiao.
+
+Quando um pedido e criado, a API publica uma mensagem no RabbitMQ. Um consumidor interno escuta a fila e registra o evento recebido, demonstrando comunicacao assincrona entre sistemas.
+
+## Regras de Negocio
+
+- Marmita deve ter nome e preco maior que zero.
+- Pedido deve ter pelo menos uma marmita.
+- Cada item do pedido deve ter quantidade maior que zero.
+- O valor total e calculado pela soma dos subtotais dos itens.
+- Pedidos com entrega consultam o CEP na ViaCEP e somam taxa de entrega:
+  - SP: R$ 5,00
+  - RJ, MG ou ES: R$ 10,00
+  - demais estados: R$ 15,00
+- Ao criar pedido, a API publica o evento `pedido.criado` no RabbitMQ.
 
 ## Endpoints da API
 
 ### Marmitas
-| Método | Endpoint | Descrição |
+
+| Metodo | Endpoint | Descricao |
 | :--- | :--- | :--- |
 | `GET` | `/marmitas` | Lista todas as marmitas cadastradas. |
-| `GET` | `/marmitas/{id}` | Busca os detalhes de uma marmita específica. |
+| `GET` | `/marmitas/{id}` | Busca os detalhes de uma marmita especifica. |
 | `POST` | `/marmitas` | Cadastra uma nova marmita. |
 | `PUT` | `/marmitas/{id}` | Atualiza os dados de uma marmita existente. |
-| `DELETE` | `/marmitas/{id}` | Remove uma marmita do catálogo. |
+| `DELETE` | `/marmitas/{id}` | Remove uma marmita do catalogo. |
 
 ### Pedidos
-| Método | Endpoint | Descrição |
+
+| Metodo | Endpoint | Descricao |
 | :--- | :--- | :--- |
 | `GET` | `/pedidos` | Lista todos os pedidos realizados. |
 | `GET` | `/pedidos/{id}` | Busca os detalhes de um pedido e seus itens. |
-| `POST` | `/pedidos` | Cria um novo pedido (calcula total automaticamente). |
-| `PUT` | `/pedidos/{id}` | Atualiza os itens ou status de um pedido. |
+| `POST` | `/pedidos` | Cria um pedido sem entrega e calcula o total dos itens. |
+| `POST` | `/pedidos/com-entrega` | Cria um pedido com CEP, consulta ViaCEP, calcula taxa de entrega e publica evento no RabbitMQ. |
+| `PUT` | `/pedidos/{id}` | Atualiza itens de um pedido. |
+| `PUT` | `/pedidos/{id}/com-entrega` | Atualiza itens e dados de entrega de um pedido. |
 | `DELETE` | `/pedidos/{id}` | Cancela e remove um pedido do sistema. |
+
+### Enderecos
+
+| Metodo | Endpoint | Descricao |
+| :--- | :--- | :--- |
+| `GET` | `/enderecos/{cep}` | Consulta endereco na ViaCEP. |
+| `GET` | `/enderecos/{cep}/entrega` | Consulta endereco e simula taxa de entrega. |
+
+## Exemplos de JSON
+
+Criar marmita:
+
+```json
+{
+  "nome": "Feijoada",
+  "preco": 25.9,
+  "categoria": "Brasileira"
+}
+```
+
+Criar pedido sem entrega:
+
+```json
+[
+  {
+    "marmita": {
+      "id": 1
+    },
+    "quantidade": 2
+  }
+]
+```
+
+Criar pedido com entrega:
+
+```json
+{
+  "cepEntrega": "01001000",
+  "itens": [
+    {
+      "marmita": {
+        "id": 1
+      },
+      "quantidade": 2
+    }
+  ]
+}
+```
 
 ## Tecnologias Utilizadas
 
-
-- **Java 17** (OpenJDK)
-- **Spring Boot 3.2.5**
-- **MySQL 8.0**
-- **JDBC** (Java Database Connectivity)
-- **Docker & Docker Compose**
-- **Swagger (SpringDoc OpenAPI)** para documentação e testes
-- **Maven** para gerenciamento de dependências
+- Java 17
+- Spring Boot 3.2.5
+- Spring Web
+- Spring JDBC
+- Spring AMQP
+- MySQL 8.0
+- RabbitMQ 3 com Management UI
+- ViaCEP
+- Swagger / SpringDoc OpenAPI
+- Docker e Docker Compose
+- Maven
 
 ## Arquitetura do Projeto
 
-O projeto segue o padrão **MVC (Model-View-Controller)** com uma camada de **Service** e **Repository**:
+O projeto segue arquitetura em camadas:
 
-1.  **Model:** Classes de domínio (`Marmita`, `Pedido`, `ItemPedido`).
-2.  **Controller:** Endpoints da API que recebem as requisições JSON.
-3.  **Service:** Lógica de negócio, validações e regras de cálculo.
-4.  **Repository:** Acesso ao banco de dados utilizando JDBC puro (SQL).
-5.  **Exception:** Tratamento global de erros e exceções personalizadas.
+- `model`: classes de dominio e DTOs.
+- `controller`: endpoints REST.
+- `service`: regras de negocio, validacoes, calculos e orquestracao.
+- `repository`: acesso ao banco com JDBC.
+- `client`: integracao com API externa ViaCEP.
+- `messaging`: configuracao, produtor e consumidor RabbitMQ.
+- `exception`: tratamento global de erros.
 
 ## Como Executar
 
-### Pré-requisitos
-- Docker Desktop instalado e rodando. https://www.docker.com/products/docker-desktop/
+Pre-requisitos:
 
-### Passo a Passo
+- Docker Desktop instalado e rodando.
 
-1.  Abra o terminal na pasta raiz do projeto (`C:\MarmitariaLeozitos`).
-2.  Suba os containers utilizando o Docker Compose:
-    ```bash
-    docker-compose up --build
-    ```
-3.  Aguarde até visualizar a mensagem `Tomcat started on port 8080`.
+Na pasta raiz do projeto, execute:
 
----
+```bash
+docker-compose up --build
+```
 
-## Como Testar
+Aguarde a aplicacao iniciar na porta `8080`.
 
-A maneira mais fácil de testar a API é através do **Swagger UI**, que fornece uma interface visual interativa.
+Servicos disponiveis:
 
-1.  Com o projeto rodando, acesse:
-     **[http://localhost:8080/swagger-ui/index.html]**
-
-### Fluxo de Teste Sugerido:
-
-1.  **Criar Marmita (POST):**
-    - Vá em `POST /marmitas`.
-    - Clique em "Try it out".
-    - Use o JSON: `{"nome": "Feijoada", "preco": 25.90, "categoria": "Brasileira"}`.
-    - Clique em "Execute".
-2.  **Listar Marmitas (GET):**
-    - Vá em `GET /marmitas` para ver o ID gerado pelo banco.
-3.  **Criar Pedido (POST):**
-    - Vá em `POST /pedidos`.
-    - Use o JSON: `[{"marmita": {"id": 1}, "quantidade": 2}]`.
-    - O sistema calculará o valor total automaticamente.
-4.  **Testar Validação:**
-    - Tente criar uma marmita com `preco: 0` e veja o erro 400 (Bad Request).
-5.  **Testar Exceção:**
-    - Tente buscar uma marmita com um ID que não existe e veja o erro 404 (Not Found) personalizado.
+- API: `http://localhost:8080`
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+- RabbitMQ Management: `http://localhost:15672`
+  - usuario: `guest`
+  - senha: `guest`
+- MySQL:
+  - host: `localhost`
+  - porta: `3307`
+  - usuario: `root`
+  - senha: `root`
+  - database: `marmitaria_db`
 
 ## Banco de Dados
 
-Se desejar conectar ao banco de dados via DBeaver ou Workbench:
-- **Host:** `localhost`
-- **Porta:** `3307` (Mapeada para evitar conflitos com MySQL local)
-- **Usuário:** `root`
-- **Senha:** `root`
-- **Database:** `marmitaria_db`
+O script de criacao das tabelas esta em:
 
----
-Desenvolvido para o Projeto de Integração de Sistemas.
+```text
+demo/src/main/resources/schema.sql
+```
+
+Se o banco ja tiver sido criado com uma versao antiga do schema, recrie o volume do Docker ou atualize manualmente a tabela `pedido` para incluir `cep_entrega`, `endereco_entrega` e `taxa_entrega`.
